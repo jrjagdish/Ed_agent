@@ -16,6 +16,7 @@ from utils.security import create_access_token, create_refresh_token, verify_tok
 import hashlib
 from fastapi import Security, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import redis.asyncio as redis
 
 security = HTTPBearer()
 load_dotenv()
@@ -28,6 +29,29 @@ cloudinary.config(
     api_secret=os.getenv("API_SECRET"),
 )
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+
+
+async def track_usage(user_id: str):
+    """Handles the incrementing and limit checking in Redis"""
+    MONTHLY_LIMIT = 1000  # Set your limit here
+    current_month = datetime.utcnow().strftime("%Y-%m")
+    usage_key = f"usage:{user_id}:{current_month}"
+
+    # Increment request count
+    request_count = await redis_client.incr(usage_key)
+
+    if request_count == 1:
+        await redis_client.expire(usage_key, 2764800)
+
+    if request_count > MONTHLY_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Monthly limit of {MONTHLY_LIMIT} requests exceeded.",
+        )
+
+    return request_count
 
 
 def get_text_from_pdf(file: UploadFile):
@@ -57,7 +81,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     new_user.hash_password(user.password)
 
     db.add(new_user)
-    db.commit() 
+    db.commit()
     db.flush()
     token = create_access_token(str(new_user.id))
     return {"message": "registered", "token": token}
@@ -87,10 +111,10 @@ def get_current_user(
     payload = verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
+
     user_id = payload.get("sub")
 
-    user = db.query(User).filter(User.id == uuid.UUID(user_id) ).first()
+    user = db.query(User).filter(User.id == uuid.UUID(user_id)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -112,7 +136,7 @@ def genrate_api_key(
     return {"api_key": token, "warning": "Copy this key . You won’t see it again."}
 
 
-def verify_api_key(credentials=Security(security), db: Session = Depends(get_db)):
+async def verify_api_key(credentials=Security(security), db: Session = Depends(get_db)):
     raw_key = credentials.credentials
     key_hash = hash_api_key(raw_key)
 
@@ -125,10 +149,12 @@ def verify_api_key(credentials=Security(security), db: Session = Depends(get_db)
     if not api_key:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
+    request_count = await track_usage(str(api_key.user_id))
+
     api_key.last_used_at = datetime.utcnow()
     db.commit()
 
-    return api_key.user
+    return {"user": api_key.user, "request_count": request_count}
 
 
 def hash_api_key(api_key: str) -> str:
@@ -155,7 +181,13 @@ async def upload_file(
     upload_result = cloudinary.uploader.upload(
         file.file, resource_type="raw", folder="pdfs", public_id=file.filename
     )
-    data = Files(user_id=user.id, uploaded_file_url=upload_result["secure_url"])
+    data = Files(
+        user_id=user.id,
+        uploaded_file_url=upload_result["secure_url"],
+        summary=result.get("Summary"),
+        mcq=result.get("MCQs"),
+        cost=result.get("Estimated Cost"),
+    )
     db.add(data)
     db.commit()
     message = "Successful!"

@@ -2,7 +2,7 @@ from datetime import datetime
 import uuid
 
 import bcrypt
-from sqlalchemy import Boolean, DateTime, String, ForeignKey
+from sqlalchemy import Boolean, DateTime, String, ForeignKey, Text, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.orm import Mapped, mapped_column
@@ -32,7 +32,7 @@ class User(Base):
     api_keys: Mapped[list["APIKey"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    files:Mapped[list["Files"]] = relationship(
+    files: Mapped[list["Files"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -68,6 +68,7 @@ class APIKey(Base):
 
     user: Mapped["User"] = relationship(back_populates="api_keys")
 
+
 class Files(Base):
     __tablename__ = "files"
 
@@ -79,5 +80,9 @@ class Files(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
 
-    uploaded_file_url: Mapped[str | None] = mapped_column(String, nullable=True)  
-    user: Mapped["User"] = relationship(back_populates="files")  
+    uploaded_file_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    summary: Mapped[Text] = mapped_column(Text, nullable=True)
+    mcq: Mapped[Text] = mapped_column(Text, nullable=True)
+    cost: Mapped[Float] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    user: Mapped["User"] = relationship(back_populates="files")
