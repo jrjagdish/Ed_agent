@@ -2,7 +2,7 @@ from datetime import datetime
 import uuid
 
 import bcrypt
-from sqlalchemy import Boolean, DateTime, String, ForeignKey, Text, Float
+from sqlalchemy import Boolean, DateTime, String, ForeignKey, Text, Float, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.orm import Mapped, mapped_column
@@ -84,5 +84,6 @@ class Files(Base):
     summary: Mapped[Text] = mapped_column(Text, nullable=True)
     mcq: Mapped[Text] = mapped_column(Text, nullable=True)
     cost: Mapped[Float] = mapped_column(Float, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     user: Mapped["User"] = relationship(back_populates="files")
