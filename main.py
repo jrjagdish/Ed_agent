@@ -48,7 +48,7 @@ COOKIE_SETTINGS = {
 }
 
 cloudinary.config(
-    cloud_name=os.getenv("CLOUD_NAME"),
+    cloud_name="dviu4sdd9",
     api_key=os.getenv("API_KEY"),
     api_secret=os.getenv("API_SECRET"),
 )
