@@ -10,4 +10,4 @@ workflow.add_edge(START, "generate_mcq")
 workflow.add_edge("generate_mcq", END)
 workflow.add_edge("generate_summary", END)
 
-app = workflow.compile()
+agent_worker = workflow.compile()
