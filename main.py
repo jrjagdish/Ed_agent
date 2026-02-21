@@ -54,7 +54,7 @@ cloudinary.config(
 )
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
-redis_client = redis.Redis(host="localhost", port=6380, decode_responses=True)
+redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
 
 
 async def track_usage(user_id: str):
