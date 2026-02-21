@@ -2,19 +2,9 @@ from sqlalchemy import create_engine
 from db.models import Base
 from sqlalchemy.orm import sessionmaker
 import os
-from pydantic_settings import BaseSettings
-
-
-
-class Settings(BaseSettings):
-    DATABASE_URL: str
-    
-    class Config:
-        env_file = ".env"
-
-settings = Settings()
-database_url =Settings.DATABASE_URL
-
+from dotenv import load_dotenv
+load_dotenv()
+database_url = os.getenv("DATABASE_URL")
 
 engine = create_engine(
     database_url, echo=True
