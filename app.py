@@ -1,4 +1,4 @@
-from agent_runner import app
+from agent_runner import agent_worker
 
 async def start_process(user_input:dict):
     print("🤖 Agent is waking up...")
