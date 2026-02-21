@@ -5,7 +5,15 @@ import cloudinary
 import cloudinary.uploader
 import os
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Request, UploadFile, HTTPException, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    Request,
+    Response,
+    UploadFile,
+    HTTPException,
+    status,
+)
 import pdfplumber
 from app import start_process
 from db.base import get_db
@@ -15,13 +23,29 @@ from sqlalchemy.orm import Session
 from utils.security import create_access_token, create_refresh_token, verify_token
 import hashlib
 from fastapi import Security, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import redis.asyncio as redis
+from sqlalchemy import func, cast, Date
+from datetime import timedelta
 
 security = HTTPBearer()
 load_dotenv()
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+COOKIE_SETTINGS = {
+    "httponly": True,
+    "samesite": "lax",
+    "secure": False,  # Set to True in production (HTTPS)
+    "path": "/",
+}
 
 cloudinary.config(
     cloud_name=os.getenv("CLOUD_NAME"),
@@ -71,7 +95,7 @@ def get_text_from_pdf(file: UploadFile):
 
 
 @app.post("/register")
-def register_user(user: UserCreate, db: Session = Depends(get_db)):
+def register_user(user: UserCreate, response: Response, db: Session = Depends(get_db)):
     print(user.email)
     existing = db.query(User).filter(User.email == user.email).first()
     if existing:
@@ -84,11 +108,21 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.flush()
     token = create_access_token(str(new_user.id))
+    refresh = create_refresh_token(str(new_user.id))
+
+    response.set_cookie(
+        key="access_token", value=token, **COOKIE_SETTINGS, max_age=3600
+    )
+    response.set_cookie(
+        key="refresh_token", value=refresh, **COOKIE_SETTINGS, max_age=604800
+    )
     return {"message": "registered", "token": token}
 
 
-@app.post("/login", response_model=UserResponse)
-def user_authentication_system(user: UserLogin, db: Session = Depends(get_db)):
+@app.post("/login")
+def user_authentication_system(
+    user: UserLogin, response: Response, db: Session = Depends(get_db)
+):
     db_user = db.query(User).filter(User.email == user.email).first()
 
     if not db_user:
@@ -98,15 +132,28 @@ def user_authentication_system(user: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token(str(db_user.id))
+    refresh = create_refresh_token(str(db_user.id))
+    print(f"login token {token}")
+    response.set_cookie(
+        key="access_token", value=token, **COOKIE_SETTINGS, max_age=3600
+    )
+    response.set_cookie(
+        key="refresh_token", value=refresh, **COOKIE_SETTINGS, max_age=604800
+    )
 
     return {"id": db_user.id, "email": db_user.email, "token": token}
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    token = credentials.credentials
+    token = request.cookies.get("access_token")
+    print(f"get current token {token}")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
 
     payload = verify_token(token)
     if not payload:
@@ -121,7 +168,7 @@ def get_current_user(
     return user
 
 
-@app.get("/api_key")
+@app.get("/api_key/")
 def genrate_api_key(
     name: str,
     current_user: User = Depends(get_current_user),
@@ -134,6 +181,50 @@ def genrate_api_key(
     db.add(api_key)
     db.commit()
     return {"api_key": token, "warning": "Copy this key . You won’t see it again."}
+
+
+@app.get("/usage-stats/")
+async def get_usage_stats(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    # 1. Real Real-time Count (Redis)
+    current_month = datetime.utcnow().strftime("%Y-%m")
+    usage_key = f"usage:{current_user.id}:{current_month}"
+    redis_count = await redis_client.get(usage_key) or 0
+
+    # 2. Real Total Spend (Sum of all costs in DB)
+    total_cost = (
+        db.query(func.sum(Files.cost)).filter(Files.user_id == current_user.id).scalar()
+        or 0
+    )
+
+    # 3. Real History (Usage over the last 7 days)
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+
+    # Query: Count files uploaded per day for this user
+    history_query = (
+        db.query(
+            cast(Files.uploaded_at, Date).label("day"),
+            func.count(Files.id).label("count"),
+        )
+        .filter(Files.user_id == current_user.id, Files.uploaded_at >= seven_days_ago)
+        .group_by(cast(Files.uploaded_at, Date))
+        .all()
+    )
+
+    # Format history for Recharts
+    real_history = [{"name": str(day), "usage": count} for day, count in history_query]
+
+    # Fallback if history is empty (new users)
+    if not real_history:
+        real_history = [{"name": "No Data", "usage": 0}]
+
+    return {
+        "total_requests": int(redis_count),
+        "total_spend": round(float(total_cost), 4),
+        "limit": 1000,
+        "history": real_history,  # <--- Now 100% Real
+    }
 
 
 async def verify_api_key(credentials=Security(security), db: Session = Depends(get_db)):
@@ -167,6 +258,8 @@ async def upload_file(
     user: User = Depends(verify_api_key),
     db: Session = Depends(get_db),
 ):
+    print(f"DEBUG: User dictionary keys are: {user.keys()}")
+    print(f"DEBUG: User dictionary content: {user}")
 
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
@@ -182,7 +275,7 @@ async def upload_file(
         file.file, resource_type="raw", folder="pdfs", public_id=file.filename
     )
     data = Files(
-        user_id=user.id,
+        user_id=user["user"].id,
         uploaded_file_url=upload_result["secure_url"],
         summary=result.get("Summary"),
         mcq=result.get("MCQs"),

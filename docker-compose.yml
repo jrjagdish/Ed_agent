@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  # Your FastAPI Backend
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+
+  # Official Redis Image
+  redis:
+    image: redis:alpine
+    container_name: redis_server
+    ports:
+      - "6380:6379" # Keeps your local 6380 mapping if you need it
+    restart: always

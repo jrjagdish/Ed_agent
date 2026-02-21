@@ -1,8 +1,9 @@
+from uuid import UUID
+
 from pydantic import BaseModel,EmailStr
 
 class UserResponse(BaseModel):
-    id : int
-    username : str
+    id : UUID
     email : EmailStr
     token : str
 
