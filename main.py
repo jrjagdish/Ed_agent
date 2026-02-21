@@ -96,7 +96,7 @@ def get_text_from_pdf(file: UploadFile):
 
 @app.post("/register")
 def register_user(user: UserCreate, response: Response, db: Session = Depends(get_db)):
-    print(user.email)
+
     existing = db.query(User).filter(User.email == user.email).first()
     if existing:
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered.")
@@ -133,7 +133,7 @@ def user_authentication_system(
 
     token = create_access_token(str(db_user.id))
     refresh = create_refresh_token(str(db_user.id))
-    print(f"login token {token}")
+   
     response.set_cookie(
         key="access_token", value=token, **COOKIE_SETTINGS, max_age=3600
     )
@@ -149,7 +149,7 @@ def get_current_user(
     db: Session = Depends(get_db),
 ):
     token = request.cookies.get("access_token")
-    print(f"get current token {token}")
+   
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
@@ -258,8 +258,7 @@ async def upload_file(
     user: User = Depends(verify_api_key),
     db: Session = Depends(get_db),
 ):
-    print(f"DEBUG: User dictionary keys are: {user.keys()}")
-    print(f"DEBUG: User dictionary content: {user}")
+    
 
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
