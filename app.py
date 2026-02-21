@@ -5,7 +5,7 @@ async def start_process(user_input:dict):
     
    
     # This is what starts the execution!
-    final_output = app.invoke(user_input)
+    final_output = agent_worker.invoke(user_input)
     
     # print("\n--- DONE ---")
     # print("Summary:", final_output["summary"])
