@@ -17,7 +17,11 @@ groq_model = ChatGroq(
 
 
 def generate_mcq(state: GraphState) -> GraphState:
-    print(f"DEBUG: MCQ Node received text: {state.get('input_text', 'EMPTY')[:50]}...")
+    input_text = state.get("input_text", "EMPTY")
+
+    if isinstance(input_text, set):
+        input_text = next(iter(input_text), "EMPTY")
+    
 
     if not state.get("input_text"):
         return {"mcqs": "ERROR: No input text found in state."}

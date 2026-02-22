@@ -1,6 +1,6 @@
 # Switching to 'bookworm' which often has more recent security patches than general 'slim'
 
-FROM python:3.13-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
@@ -13,6 +13,9 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+RUN pip freeze | grep -i jose || true
+RUN pip uninstall -y jose python-jose || true
+RUN pip install --no-cache-dir python-jose[cryptography]==3.5.0
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .

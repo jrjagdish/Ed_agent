@@ -20,6 +20,7 @@ from db.base import get_db
 from db.models import APIKey, Files, User
 from schemas import UserCreate, UserLogin, UserResponse
 from sqlalchemy.orm import Session
+from utils.config import sanitize_public_id
 from utils.security import create_access_token, create_refresh_token, verify_token
 import hashlib
 from fastapi import Security, HTTPException
@@ -81,8 +82,11 @@ async def track_usage(user_id: str):
 def get_text_from_pdf(file: UploadFile):
     file.file.seek(0)
     with pdfplumber.open(file.file) as pdf:
-        if len(pdf.pages) > 3:
-            return {"ERROR: Please provide the pdf which has less than 3 pages"}
+        if len(pdf.pages) > 5:
+            raise HTTPException(
+                status_code=400,
+                detail="Please upload a PDF with at most 3 pages."
+            )
         else:
             text = ""
             for page in pdf.pages:
@@ -270,8 +274,10 @@ async def upload_file(
     result = await start_process({"input_text": data})
     file.file.seek(0)
 
+    public_id = sanitize_public_id(file.filename)
+
     upload_result = cloudinary.uploader.upload(
-        file.file, resource_type="raw", folder="pdfs", public_id=file.filename
+        file.file, resource_type="raw", folder="pdfs", public_id=public_id
     )
     data = Files(
         user_id=user["user"].id,
