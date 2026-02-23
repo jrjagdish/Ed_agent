@@ -36,15 +36,15 @@ load_dotenv()
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173","https://ed-agent-frontend.onrender.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 COOKIE_SETTINGS = {
     "httponly": True,
-    "samesite": "lax",
-    "secure": False,  # Set to True in production (HTTPS)
+    "samesite": "none",
+    "secure": True,  # Set to True in production (HTTPS)
     "path": "/",
 }
 
