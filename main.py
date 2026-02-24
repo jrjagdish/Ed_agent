@@ -29,6 +29,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import redis.asyncio as redis
 from sqlalchemy import func, cast, Date
 from datetime import timedelta
+from uuid import UUID
 
 security = HTTPBearer()
 load_dotenv()
@@ -202,7 +203,7 @@ def list_api_keys(
 
 @app.delete("/api_key/{key_id}")
 def delete_api_key(
-    key_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    key_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     api_key = (
         db.query(APIKey)
