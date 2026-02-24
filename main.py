@@ -186,6 +186,36 @@ def genrate_api_key(
     db.commit()
     return {"api_key": token, "warning": "Copy this key . You won’t see it again."}
 
+@app.get("/api_keys/")
+def list_api_keys(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    keys = (
+        db.query(APIKey)
+        .filter(APIKey.user_id == current_user.id, APIKey.is_active == True)
+        .all()
+    )
+    return [
+        {"id": key.id, "name": key.name, "last_used_at": key.last_used_at}
+        for key in keys
+    ]
+
+@app.delete("/api_key/{key_id}")
+def delete_api_key(
+    key_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    api_key = (
+        db.query(APIKey)
+        .filter(APIKey.id == key_id, APIKey.user_id == current_user.id)
+        .first()
+    )
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    api_key.is_active = False
+    db.commit()
+    return {"message": "API key deactivated"}    
+
 
 @app.get("/usage-stats/")
 async def get_usage_stats(
